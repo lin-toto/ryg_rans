@@ -354,7 +354,7 @@ int main()
             __m256i nextRenormStates = _mm256_i32gather_epi32(reinterpret_cast<const int*>(rans_begin), offsetSimd, 4);
 
             // renormedRans = ransSimd << BITS_WRITEOUT | nextRenormStates;
-            __m256i renormedRans = _mm256_or_si256(_mm256_srli_epi32(ransSimd, BITS_WRITEOUT), nextRenormStates);
+            __m256i renormedRans = _mm256_or_si256(_mm256_slli_epi32(ransSimd, BITS_WRITEOUT), nextRenormStates);
 
             // ransSimd = renormMask ? renormedRans : ransSimd;
             ransSimd = _mm256_blendv_epi8(ransSimd, renormedRans, renormMask);
