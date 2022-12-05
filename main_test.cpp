@@ -151,7 +151,7 @@ int main()
 
     // cumlative->symbol table
     // this is super brute force
-    uint8_t cum2sym[prob_scale];
+    uint32_t cum2sym[prob_scale];
     for (int s=0; s < 256; s++)
         for (uint32_t i=stats.cum_freqs[s]; i < stats.cum_freqs[s+1]; i++)
             cum2sym[i] = s;
@@ -283,9 +283,13 @@ int main()
     for (int symbolCount = 0; ; symbolCount++) {
         // Extract Symbol
 
-        // currSymbolCdf = ransSimd & symbolMask
+        // currSymbolCdf = ransSimd & symbolMask;
         __m256i currSymbolCdf = _mm256_and_si256(ransSimd, probMask);
 
+        // currSymbol = cum2sym[currSymbolCdf];
+        __m256i currSymbol = _mm256_i32gather_epi32(reinterpret_cast<const int*>(cum2sym), currSymbolCdf, 4);
+
+        /*
         __m256i currSymbol = _mm256_setzero_si256();
         for (int symbol = 1; symbol < sizeof(stats.cum_freqs); symbol++) {
             // currCdfValue = stats.cum_freqs[symbol];
@@ -307,7 +311,7 @@ int main()
         }
 
         // currSymbol -= 1
-        currSymbol = _mm256_sub_epi32(currSymbol, _mm256_set1_epi32(1));
+        currSymbol = _mm256_sub_epi32(currSymbol, _mm256_set1_epi32(1));*/
 
         /*uint32_t cum_freqs[8] __attribute__((aligned(32)));
         _mm256_store_si256((__m256i*)cum_freqs, currSymbolCdf);
