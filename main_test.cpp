@@ -58,7 +58,7 @@ static uint8_t* read_file(char const* filename, size_t* out_size)
 struct SymbolStats
 {
     uint32_t freqs[256];
-    uint32_t cum_freqs[257];
+    uint32_t cum_freqs[257] __attribute__((aligned(32)));
 
     void count_freqs(uint8_t const* in, size_t nbytes);
     void calc_cum_freqs();
@@ -287,43 +287,55 @@ int main()
         __m256i currSymbolCdf = _mm256_and_si256(ransSimd, probMask);
 
         // currSymbol = cum2sym[currSymbolCdf];
-        __m256i currSymbol = _mm256_i32gather_epi32(reinterpret_cast<const int*>(cum2sym), currSymbolCdf, 4);
+        //__m256i currSymbol = _mm256_i32gather_epi32(reinterpret_cast<const int*>(cum2sym), currSymbolCdf, 4);
 
-        /*
+
         __m256i currSymbol = _mm256_setzero_si256();
-        for (int symbol = 1; symbol < sizeof(stats.cum_freqs); symbol++) {
+        __m256i prevFlags = _mm256_setzero_si256();
+        for (int symbol = 0; symbol < sizeof(stats.cum_freqs); symbol++) {
             // currCdfValue = stats.cum_freqs[symbol];
             //__m256i currCdfValue = _mm256_i32gather_epi32(reinterpret_cast<const int*>(stats.cum_freqs), _mm256_set1_epi32(symbol), 4);
-            __m256i currCdfValue = _mm256_set1_epi32(stats.cum_freqs[symbol]);
+            __m256i currCdfValue = _mm256_set1_epi32(stats.cum_freqs[symbol + 1]);
 
             // flags = currCdfValue > currSymbolCdf;
             __m256i flags = _mm256_cmpgt_epi32(currCdfValue, currSymbolCdf);
 
-            // newlyFound = flags - foundFlags;
-            __m256i newlyFound = _mm256_and_si256(flags, _mm256_cmpeq_epi32(currSymbol, _mm256_setzero_si256()));
+            // newlyFound = flags & ~prevFlags;
+            __m256i newlyFound = _mm256_and_si256(flags, ~prevFlags);
+
+            prevFlags = flags;
+
+            // newlyFound = flags & currSymbol == 0;
+            //__m256i newlyFound = _mm256_and_si256(flags, _mm256_cmpeq_epi32(currSymbol, _mm256_setzero_si256()));
 
             if (_mm256_movemask_epi8(newlyFound)) {
-                // currSymbol = newlyFound ? symbol - 1 : currSymbol
+                // currSymbol = newlyFound ? symbol : currSymbol
                 currSymbol = _mm256_blendv_epi8(currSymbol, _mm256_set1_epi32(symbol), newlyFound);
 
-                if (!~_mm256_movemask_epi8(flags)) break;
+                if (!(~_mm256_movemask_epi8(flags))) break;
             }
         }
-
-        // currSymbol -= 1
-        currSymbol = _mm256_sub_epi32(currSymbol, _mm256_set1_epi32(1));*/
 
         /*uint32_t cum_freqs[8] __attribute__((aligned(32)));
         _mm256_store_si256((__m256i*)cum_freqs, currSymbolCdf);
         uint32_t s[8] __attribute__((aligned(32)));
         for (int i = 0; i < 8; i++) {
-            s[i] = std::find_if(stats.cum_freqs, stats.cum_freqs + 257, [&](int v) { return v > cum_freqs[i]; }) - stats.cum_freqs - 1;
+            //s[i] = std::find_if(stats.cum_freqs, stats.cum_freqs + 257, [&](int v) { return v > cum_freqs[i]; }) - stats.cum_freqs - 1;
+            for (int j = 0; j < 256; j += 8) {
+                __m256i target = _mm256_load_si256((__m256i*)&stats.cum_freqs[j]);
+                __m256i gay = _mm256_cmpgt_epi32(target, _mm256_set1_epi32(cum_freqs[i]));
+                uint32_t flag = _mm256_movemask_epi8(gay);
+                if (flag) {
+                    s[i] = __builtin_ctz(flag) / 4 + j - 1;
+                    break;
+                }
+            }
         }
-        currSymbol = _mm256_load_si256(reinterpret_cast<__m256i*>(s));*/
+        __m256i currSymbol = _mm256_load_si256(reinterpret_cast<__m256i*>(s));*/
 
         // TODO: store output properly
 
-        int out[8] __attribute__((aligned(256)));
+        int out[8] __attribute__((aligned(32)));
         _mm256_store_si256((__m256i*)out, currSymbol);
         for (int j = 0; j < 8; j++) {
             dec_bytes_split[j][symbolCount] = out[j];
@@ -352,6 +364,9 @@ int main()
         if (_mm256_movemask_epi8(renormMask)) {
             // nextRenormStates = rans_begin[offsetSimd];
             __m256i nextRenormStates = _mm256_i32gather_epi32(reinterpret_cast<const int*>(rans_begin), offsetSimd, 4);
+
+            // nextRenormStates = renormMask ? rans_begin[offsetSimd] : 0;
+            //__m256i nextRenormStates = _mm256_mask_i32gather_epi32(_mm256_setzero_si256(), reinterpret_cast<const int*>(rans_begin), offsetSimd, renormMask, 4);
 
             // renormedRans = ransSimd << BITS_WRITEOUT | nextRenormStates;
             __m256i renormedRans = _mm256_or_si256(_mm256_slli_epi32(ransSimd, BITS_WRITEOUT), nextRenormStates);

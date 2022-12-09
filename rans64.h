@@ -14,6 +14,7 @@
 #define RANS64_HEADER
 
 #include <stdint.h>
+#include <iostream>
 
 #ifdef assert
 #define Rans64Assert assert
@@ -114,6 +115,7 @@ static inline void Rans64DecInit(Rans64State* r, uint32_t** pptr)
     *r = x;
 }
 
+
 // Returns the current cumulative frequency (map it to a symbol yourself!)
 static inline uint32_t Rans64DecGet(Rans64State* r, uint32_t scale_bits)
 {
@@ -137,6 +139,18 @@ static inline void Rans64DecAdvance(Rans64State* r, uint32_t** pptr, uint32_t st
         *pptr += 1;
         Rans64Assert(x >= RANS64_L);
     }
+
+    *r = x;
+}
+
+static inline void Rans64DecInitAdvance(Rans64State* r, uint32_t** pptr)
+{
+    uint64_t x = *r;
+
+    // renormalize
+    x = (x << 32) | **pptr;
+    *pptr += 1;
+    Rans64Assert(x >= RANS64_L);
 
     *r = x;
 }
@@ -259,7 +273,7 @@ static inline void Rans64DecSymbolInit(Rans64DecSymbol* s, uint32_t start, uint3
 // multiplications instead of a divide.
 //
 // See RansEncSymbolInit for a description of how this works.
-static inline void Rans64EncPutSymbol(Rans64State* r, uint32_t** pptr, Rans64EncSymbol const* sym, uint32_t scale_bits)
+static inline void Rans64EncPutSymbol(Rans64State* r, uint32_t** pptr, uint32_t** xptr, Rans64EncSymbol const* sym, uint32_t scale_bits)
 {
     Rans64Assert(sym->freq != 0); // can't encode symbol with freq=0
 
@@ -270,6 +284,9 @@ static inline void Rans64EncPutSymbol(Rans64State* r, uint32_t** pptr, Rans64Enc
         *pptr -= 1;
         **pptr = (uint32_t) x;
         x >>= 32;
+
+        *xptr -= 1;
+        **xptr = (uint32_t) x;
     }
 
     // x = C(s,x)

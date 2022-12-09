@@ -20,5 +20,8 @@ exam_simd_sse41: main_simd.cpp platform.h rans_word_sse41.h
 exam_alias: main_alias.cpp platform.h rans_byte.h
 	g++ -o $@ $< -O3 $(LIBS)
 
+main_test_dbg: main_test.cpp rans_byte_test.h
+	g++ --std=c++20 -o $@ $< -g $(LIBS) -march=native
+
 main_test: main_test.cpp rans_byte_test.h
 	g++ --std=c++20 -o $@ $< -O3 $(LIBS) -march=native
